@@ -94,9 +94,14 @@ func (p *Process) Signal(sig any) {
 func (p *Process) Stop() {
 	if p.running.Load() {
 		p.cancel()
-		p.wg.Wait()
+		p.Wait()
 		close(p.sig)
 	}
+}
+
+// Wait waits for the process to finish.
+func (p *Process) Wait() {
+	p.wg.Wait()
 }
 
 type ProcessError int

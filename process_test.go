@@ -3,6 +3,7 @@ package rt_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -97,4 +98,33 @@ func TestManager_RestartOnError(t *testing.T) {
 	if !proc.IsRunning() {
 		t.Fatal("Process did not restart on error")
 	}
+}
+
+func TestManager_ProcessWait(t *testing.T) {
+	r := rt.New()
+	defer r.Close()
+
+	p := &testProcess{}
+
+	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorPanic})
+
+	time.Sleep(100 * time.Millisecond)
+	if !proc.IsRunning() {
+		t.Fatal("Process did not start")
+	}
+
+	const nbWaiters = 3
+
+	var wg sync.WaitGroup
+	wg.Add(nbWaiters)
+
+	for i := 0; i < nbWaiters; i++ {
+		go func() {
+			defer wg.Done()
+			proc.Wait()
+		}()
+	}
+
+	proc.Stop()
+	wg.Wait() // ensure that stopping the process unblocks any waiters
 }
