@@ -46,10 +46,10 @@ func processSpawnedEvent(pid uint64) EventProcessSpawned {
 
 type EventProcessExited struct {
 	BaseEvent
-	PID uint32 `json:"pid"`
+	PID uint64 `json:"pid"`
 }
 
-func processExitedEvent(pid uint32, err error) EventProcessExited {
+func processExitedEvent(pid uint64, err error) EventProcessExited {
 	return EventProcessExited{
 		BaseEvent: BaseEvent{Type: EventTypeProcessExited, Error: err},
 		PID:       pid,
@@ -69,10 +69,10 @@ func closeEvent() EventClose {
 type EventCreateTopic struct {
 	BaseEvent
 	Name       string `json:"name"`
-	BufferSize int    `json:"buffer_size"`
+	BufferSize uint32 `json:"buffer_size"`
 }
 
-func createTopicEvent(name string, bufferSize int, err error) EventCreateTopic {
+func createTopicEvent(name string, bufferSize uint32, err error) EventCreateTopic {
 	return EventCreateTopic{
 		BaseEvent:  BaseEvent{Type: EventTypeCreateTopic, Error: err},
 		Name:       name,

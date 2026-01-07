@@ -16,7 +16,7 @@ type Results struct {
 	Data []any
 }
 
-func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
+func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
 	rt := rt.New()
 
 	if err := rt.CreateTopic(TopicName, buffering); err != nil {
@@ -24,22 +24,23 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 	}
 
 	consumedPerSubscription := make([]*Results, subCount)
-	for i := 0; i < subCount; i++ {
+	for i := range subCount {
 		consumedPerSubscription[i] = &Results{}
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(subCount * consumersPerSub)
 
-	for i := 0; i < subCount; i++ {
+	for i := range subCount {
 		subName := fmt.Sprintf("sub-%d", i)
 
-		for j := 0; j < consumersPerSub; j++ {
+		for range consumersPerSub {
 			ch, err := rt.Subscribe(TopicName, subName)
-			defer ch.Close()
 			if err != nil {
 				panic(err)
 			}
+			defer ch.Close()
+
 			go func() {
 				for msg := range ch.Data() {
 					consumedPerSubscription[i].Lock()
@@ -53,7 +54,7 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := rt.Publish(context.Background(), TopicName, fmt.Sprintf("bing%d", i)); err != nil {
 			t.Fatalf("failed to publish: %v", err)
 		}
@@ -70,7 +71,7 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 }
 
 func TestEventDispatch_PubSub(t *testing.T) {
-	for _, topicBufferSize := range []int{0, 10, 100} {
+	for _, topicBufferSize := range []uint32{0, 10, 100} {
 		for _, subCount := range []int{1, 2, 100} {
 			for _, consumersPerSub := range []int{1, 2, 100} {
 				t.Run(fmt.Sprintf("Buf=%d,Sub=%d,Cons=%d", topicBufferSize, subCount, consumersPerSub), func(t *testing.T) {

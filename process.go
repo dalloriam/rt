@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"go.opentelemetry.io/otel/trace"
 )
@@ -15,7 +14,6 @@ type ProcessState struct {
 	Ctx context.Context
 	Log *slog.Logger
 	Rt  *Runtime
-	Sig <-chan any
 }
 
 type ProcessFn func(state *ProcessState) error
@@ -29,7 +27,6 @@ type Process struct {
 	pid     uint64
 	span    trace.Span
 	state   *ProcessState
-	sig     chan any
 	wg      sync.WaitGroup
 }
 
@@ -47,7 +44,11 @@ func (p *Process) run() {
 
 outside:
 	for {
-		if err := p.fn(p.state); err != nil {
+		err := p.fn(p.state)
+
+		p.manager.rt.tryPublishEvent(p.state.Ctx, processExitedEvent(p.pid, err))
+
+		if err != nil {
 			p.state.Log.Error("process failed", "error", err)
 
 			switch p.opts.ErrorHandling {
@@ -70,7 +71,7 @@ outside:
 		}
 	}
 	p.running.Store(false)
-	p.manager.Remove(p.pid)
+	p.manager.remove(p.pid)
 	p.state.Log.Info("process stopped")
 }
 
@@ -78,24 +79,11 @@ func (p *Process) IsRunning() bool {
 	return p.running.Load()
 }
 
-// Signal sends a signal to the process.
-func (p *Process) Signal(sig any) {
-	select {
-	case <-p.state.Ctx.Done():
-		return
-	case <-time.After(5 * time.Second):
-		p.state.Log.Error("signal send timeout")
-		return
-	case p.sig <- sig:
-	}
-}
-
 // Stop stops the process.
 func (p *Process) Stop() {
 	if p.running.Load() {
 		p.cancel()
 		p.Wait()
-		close(p.sig)
 	}
 }
 
@@ -155,7 +143,6 @@ func (m *processManager) Add(ctx context.Context, fn ProcessFn, opts ProcessSpaw
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	sig := make(chan any)
 
 	log := m.log.With("pid", m.pid)
 	if opts.Name != "" {
@@ -166,7 +153,6 @@ func (m *processManager) Add(ctx context.Context, fn ProcessFn, opts ProcessSpaw
 		Ctx: ctx,
 		Log: log,
 		Rt:  m.rt,
-		Sig: sig,
 	}
 
 	proc := &Process{
@@ -177,7 +163,6 @@ func (m *processManager) Add(ctx context.Context, fn ProcessFn, opts ProcessSpaw
 		pid:     m.pid,
 		span:    span,
 		state:   state,
-		sig:     sig,
 		wg:      sync.WaitGroup{},
 	}
 
@@ -190,14 +175,10 @@ func (m *processManager) Add(ctx context.Context, fn ProcessFn, opts ProcessSpaw
 	return proc
 }
 
-func (m *processManager) Remove(pid uint64) {
+func (m *processManager) remove(pid uint64) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
-
-	if proc, ok := m.proc[pid]; ok {
-		proc.Stop()
-		delete(m.proc, pid)
-	}
+	delete(m.proc, pid)
 }
 
 func (m *processManager) Close() error {
