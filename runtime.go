@@ -168,7 +168,7 @@ func (r *Runtime) Publish(ctx context.Context, topic string, msg any) error {
 }
 
 // Subscribe subscribes to a topic.
-// Returns a subscription handle or an error if the topic does not exist
+// Returns a subscription handle or an error if the topic does not exist.
 func (r *Runtime) Subscribe(topic, subscription string) (*Subscription, error) {
 	sub, err := r.evt.Subscribe(topic, subscription)
 
