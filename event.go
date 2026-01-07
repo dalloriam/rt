@@ -46,10 +46,10 @@ func processSpawnedEvent(pid uint64) EventProcessSpawned {
 
 type EventProcessExited struct {
 	BaseEvent
-	PID uint32 `json:"pid"`
+	PID uint64 `json:"pid"`
 }
 
-func processExitedEvent(pid uint32, err error) EventProcessExited {
+func processExitedEvent(pid uint64, err error) EventProcessExited {
 	return EventProcessExited{
 		BaseEvent: BaseEvent{Type: EventTypeProcessExited, Error: err},
 		PID:       pid,
