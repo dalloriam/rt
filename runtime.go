@@ -30,8 +30,8 @@ func defaultOptions() Options {
 		PubSub: PubSubOptions{
 			MaxBufferSize: 1024,
 		},
-		InternalEvents:   nil,
-		TelemetryOptions: nil,
+		InternalEvents: nil,
+		Telemetry:      nil,
 	}
 }
 
@@ -67,9 +67,9 @@ func New(opts ...Options) *Runtime {
 
 	rt.evt = evt
 
-	if options.TelemetryOptions != nil {
+	if options.Telemetry != nil {
 		var err error
-		rt.telemetryCleanup, err = telemetry.Setup(context.Background(), *options.TelemetryOptions)
+		rt.telemetryCleanup, err = telemetry.Setup(context.Background(), *options.Telemetry)
 		if err != nil {
 			panic(err)
 		}
