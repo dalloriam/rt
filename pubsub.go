@@ -92,7 +92,7 @@ func (b *topic) run() {
 				case s.rx <- evt:
 				}
 				dispatchWg.Done()
-				sub.inflight.Done()
+				s.inflight.Done()
 			}(sub)
 		}
 		dispatchWg.Wait()
