@@ -16,7 +16,7 @@ type Results struct {
 	Data []any
 }
 
-func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
+func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
 	rt := rt.New()
 
 	if err := rt.CreateTopic(TopicName, buffering); err != nil {
@@ -71,7 +71,7 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 }
 
 func TestEventDispatch_PubSub(t *testing.T) {
-	for _, topicBufferSize := range []int{0, 10, 100} {
+	for _, topicBufferSize := range []uint32{0, 10, 100} {
 		for _, subCount := range []int{1, 2, 100} {
 			for _, consumersPerSub := range []int{1, 2, 100} {
 				t.Run(fmt.Sprintf("Buf=%d,Sub=%d,Cons=%d", topicBufferSize, subCount, consumersPerSub), func(t *testing.T) {

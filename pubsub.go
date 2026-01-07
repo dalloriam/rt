@@ -59,7 +59,7 @@ type topic struct {
 	subscriptions map[string]*Subscription
 }
 
-func newTopic(bufferSize int, tracer trace.Tracer) *topic {
+func newTopic(bufferSize uint32, tracer trace.Tracer) *topic {
 	t := &topic{
 		tracer:        tracer,
 		rx:            make(chan any, bufferSize),
@@ -187,7 +187,7 @@ func (h *pubsubDispatch) getTopic(name string) (*topic, bool) {
 }
 
 // CreateTopic creates a new topic with the given name and buffer size.
-func (h *pubsubDispatch) CreateTopic(name string, bufferSize int) error {
+func (h *pubsubDispatch) CreateTopic(name string, bufferSize uint32) error {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 

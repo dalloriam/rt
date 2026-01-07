@@ -14,6 +14,7 @@ import (
 	"github.com/dalloriam/rt/telemetry"
 )
 
+// Runtime represents the main runtime environment.
 type Runtime struct {
 	evt              *pubsubDispatch
 	log              *slog.Logger
@@ -24,22 +25,13 @@ type Runtime struct {
 	tracer           trace.Tracer
 }
 
-// Options contains options for the runtime.
-type Options struct {
-	// The topic to which internal events are published.
-	// If empty, no internal events are published.
-	// If non-empty, the runtime will create a topic with this name and publish internal events to it.
-	InternalEventsTopic string
-
-	// Whether to enable opentelemetry.
-	// If nil, opentelemetry is disabled.
-	TelemetryOptions *telemetry.Options
-}
-
 func defaultOptions() Options {
 	return Options{
-		InternalEventsTopic: "",
-		TelemetryOptions:    nil,
+		PubSub: PubSubOptions{
+			MaxBufferSize: 1024,
+		},
+		InternalEvents:   nil,
+		TelemetryOptions: nil,
 	}
 }
 
@@ -67,8 +59,8 @@ func New(opts ...Options) *Runtime {
 
 	evt := newPubSub(log, rt)
 
-	if options.InternalEventsTopic != "" {
-		if err := evt.CreateTopic(options.InternalEventsTopic, 0); err != nil {
+	if options.InternalEvents != nil {
+		if err := evt.CreateTopic(options.InternalEvents.Topic, options.InternalEvents.BufferSize); err != nil {
 			panic(err)
 		}
 	}
@@ -96,8 +88,8 @@ func New(opts ...Options) *Runtime {
 }
 
 func (r *Runtime) tryPublishEvent(ctx context.Context, event any) {
-	if r.opts.InternalEventsTopic != "" {
-		if err := r.evt.Publish(ctx, r.opts.InternalEventsTopic, event); err != nil {
+	if r.opts.InternalEvents != nil {
+		if err := r.evt.Publish(ctx, r.opts.InternalEvents.Topic, event); err != nil {
 			r.log.Error("error while publishing internal event", "error", err)
 		}
 	}
@@ -147,7 +139,18 @@ func (r *Runtime) Close() {
 	r.log.Info("runtime shutdown complete")
 }
 
-func (r *Runtime) CreateTopic(name string, bufferSize int) error {
+// CreateTopic creates a new topic with the given name and buffer size.
+// Returns an error if the topic already exists or if the buffer size exceeds
+// the maximum allowed size.
+func (r *Runtime) CreateTopic(name string, bufferSize uint32) error {
+	if bufferSize > r.opts.PubSub.MaxBufferSize {
+		return ErrBufferSizeTooLarge
+	}
+
+	if name == "" {
+		return ErrInvalidTopicName
+	}
+
 	err := r.evt.CreateTopic(name, bufferSize)
 
 	r.tryPublishEvent(context.Background(), createTopicEvent(name, bufferSize, err))
@@ -165,6 +168,7 @@ func (r *Runtime) Publish(ctx context.Context, topic string, msg any) error {
 }
 
 // Subscribe subscribes to a topic.
+// Returns a subscription handle or an error if the topic does not exist
 func (r *Runtime) Subscribe(topic, subscription string) (*Subscription, error) {
 	sub, err := r.evt.Subscribe(topic, subscription)
 

@@ -69,10 +69,10 @@ func closeEvent() EventClose {
 type EventCreateTopic struct {
 	BaseEvent
 	Name       string `json:"name"`
-	BufferSize int    `json:"buffer_size"`
+	BufferSize uint32 `json:"buffer_size"`
 }
 
-func createTopicEvent(name string, bufferSize int, err error) EventCreateTopic {
+func createTopicEvent(name string, bufferSize uint32, err error) EventCreateTopic {
 	return EventCreateTopic{
 		BaseEvent:  BaseEvent{Type: EventTypeCreateTopic, Error: err},
 		Name:       name,
