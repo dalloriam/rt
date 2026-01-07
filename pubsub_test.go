@@ -24,22 +24,23 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 	}
 
 	consumedPerSubscription := make([]*Results, subCount)
-	for i := 0; i < subCount; i++ {
+	for i := range subCount {
 		consumedPerSubscription[i] = &Results{}
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(subCount * consumersPerSub)
 
-	for i := 0; i < subCount; i++ {
+	for i := range subCount {
 		subName := fmt.Sprintf("sub-%d", i)
 
-		for j := 0; j < consumersPerSub; j++ {
+		for range consumersPerSub {
 			ch, err := rt.Subscribe(TopicName, subName)
-			defer ch.Close()
 			if err != nil {
 				panic(err)
 			}
+			defer ch.Close()
+
 			go func() {
 				for msg := range ch.Data() {
 					consumedPerSubscription[i].Lock()
@@ -53,7 +54,7 @@ func doTest(t *testing.T, buffering int, subCount int, consumersPerSub int) {
 
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := rt.Publish(context.Background(), TopicName, fmt.Sprintf("bing%d", i)); err != nil {
 			t.Fatalf("failed to publish: %v", err)
 		}

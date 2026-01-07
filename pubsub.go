@@ -10,24 +10,30 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// A Subscription represents a subscription to a topic.
+// Every message is delivered to every subscription exactly once.
+// Multiple consumers can read from the same subscription's Data() channel.
 type Subscription struct {
-	name       string
-	topic      *topic
-	rx         chan any
-	closed     atomic.Bool
-	cancelChan chan struct{}
+	name     string
+	topic    *topic
+	rx       chan any
+	closed   atomic.Bool
+	shutdown chan struct{}
+	inflight sync.WaitGroup
 }
 
 func newSubscription(name string, t *topic) *Subscription {
 	return &Subscription{
-		name:       name,
-		topic:      t,
-		rx:         make(chan any),
-		cancelChan: make(chan struct{}),
+		name:     name,
+		topic:    t,
+		rx:       make(chan any),
+		shutdown: make(chan struct{}),
 	}
 }
 
 // Data returns the channel on which the subscription receives data.
+// Consumers should range over this channel to receive messages.
+// The channel is closed when the subscription or its associated topic are closed.
 func (s *Subscription) Data() <-chan any {
 	return s.rx
 }
@@ -37,9 +43,10 @@ func (s *Subscription) Data() <-chan any {
 // (although all subscribers will stop receiving messages once called once).
 func (s *Subscription) Close() {
 	if s.closed.CompareAndSwap(false, true) {
-		close(s.cancelChan)
-		s.topic.Unsubscribe(s.name)
-		close(s.rx)
+		s.topic.Unsubscribe(s.name) // ensure no new messages are sent
+		close(s.shutdown)
+		s.inflight.Wait() // wait for inflight messages to be processed
+		close(s.rx)       // we know no new messages will be sent, safe to close
 	}
 }
 
@@ -50,18 +57,13 @@ type topic struct {
 
 	mtx           sync.Mutex
 	subscriptions map[string]*Subscription
-
-	// this channel gets closed when the first subscriber is added. this is so we dont start reading until there is a consumer
-	emptySubChannel      chan struct{}
-	atLeastOneSubCreated bool
 }
 
 func newTopic(bufferSize int, tracer trace.Tracer) *topic {
 	t := &topic{
-		tracer:          tracer,
-		rx:              make(chan any, bufferSize),
-		subscriptions:   make(map[string]*Subscription),
-		emptySubChannel: make(chan struct{}),
+		tracer:        tracer,
+		rx:            make(chan any, bufferSize),
+		subscriptions: make(map[string]*Subscription),
 	}
 
 	t.wg.Add(1)
@@ -73,33 +75,33 @@ func newTopic(bufferSize int, tracer trace.Tracer) *topic {
 func (b *topic) run() {
 	var dispatchWg sync.WaitGroup
 
-	// wait to get at least one subscriber
-	select {
-	case <-b.emptySubChannel:
-	}
-
 	for evt := range b.rx {
 		b.mtx.Lock()
+		subs := make([]*Subscription, 0, len(b.subscriptions))
 		for _, sub := range b.subscriptions {
+			sub.inflight.Add(1)
+			subs = append(subs, sub)
+		}
+		b.mtx.Unlock()
+
+		for _, sub := range subs {
 			dispatchWg.Add(1)
-			go func() {
+			go func(s *Subscription) {
 				select {
-				case <-sub.cancelChan:
-					dispatchWg.Done()
-					return
-				case sub.rx <- evt:
-					dispatchWg.Done()
-					return
+				case <-s.shutdown:
+				case s.rx <- evt:
 				}
-			}()
+				dispatchWg.Done()
+				sub.inflight.Done()
+			}(sub)
 		}
 		dispatchWg.Wait()
-		b.mtx.Unlock()
 	}
 
 	b.wg.Done()
 }
 
+// Subscribe creates or retrieves a subscription to the topic.
 func (b *topic) Subscribe(subName string) (*Subscription, error) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -111,15 +113,10 @@ func (b *topic) Subscribe(subName string) (*Subscription, error) {
 	source := newSubscription(subName, b)
 	b.subscriptions[subName] = source
 
-	if !b.atLeastOneSubCreated {
-		close(b.emptySubChannel)
-	}
-
-	b.atLeastOneSubCreated = true
-
 	return source, nil
 }
 
+// Unsubscribe removes a subscription from the topic.
 func (b *topic) Unsubscribe(subName string) {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
@@ -127,25 +124,24 @@ func (b *topic) Unsubscribe(subName string) {
 	delete(b.subscriptions, subName)
 }
 
-func (b *topic) Publish(ctx context.Context, evt any) error {
+// Publish sends a message to all subscriptions of the topic.
+func (b *topic) Publish(ctx context.Context, msg any) error {
 	ctx, span := b.tracer.Start(ctx, "Topic.Publish")
 	defer span.End()
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case b.rx <- evt:
+	case b.rx <- msg:
 	}
 
 	return nil
 }
 
+// Close closes the topic and all its subscriptions.
 func (b *topic) Close() {
 	b.mtx.Lock()
 	close(b.rx)
-	if !b.atLeastOneSubCreated {
-		close(b.emptySubChannel)
-	}
 	b.mtx.Unlock()
 
 	b.wg.Wait()
@@ -163,26 +159,26 @@ func (b *topic) Close() {
 	}
 }
 
-type eventDispatch struct {
+type pubsubDispatch struct {
 	log    *slog.Logger
 	mtx    sync.Mutex
 	rt     *Runtime
 	topics map[string]*topic
 }
 
-func newEvt(logger *slog.Logger, rt *Runtime) *eventDispatch {
+func newPubSub(logger *slog.Logger, rt *Runtime) *pubsubDispatch {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &eventDispatch{
+	return &pubsubDispatch{
 		log:    logger.WithGroup("evt"),
 		rt:     rt,
 		topics: make(map[string]*topic),
 	}
 }
 
-func (h *eventDispatch) getTopic(name string) (*topic, bool) {
+func (h *pubsubDispatch) getTopic(name string) (*topic, bool) {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
@@ -190,7 +186,8 @@ func (h *eventDispatch) getTopic(name string) (*topic, bool) {
 	return t, ok
 }
 
-func (h *eventDispatch) CreateTopic(name string, bufferSize int) error {
+// CreateTopic creates a new topic with the given name and buffer size.
+func (h *pubsubDispatch) CreateTopic(name string, bufferSize int) error {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
@@ -203,7 +200,8 @@ func (h *eventDispatch) CreateTopic(name string, bufferSize int) error {
 	return nil
 }
 
-func (h *eventDispatch) Subscribe(topicName, subscription string) (*Subscription, error) {
+// Subscribe creates or retrieves a subscription to the given topic.
+func (h *pubsubDispatch) Subscribe(topicName, subscription string) (*Subscription, error) {
 	topic, ok := h.getTopic(topicName)
 	if !ok {
 		return nil, fmt.Errorf("topic '%s' not found", topicName)
@@ -219,7 +217,9 @@ func (h *eventDispatch) Subscribe(topicName, subscription string) (*Subscription
 	return sub, nil
 }
 
-func (h *eventDispatch) Publish(ctx context.Context, topicName string, event any) error {
+// Publish sends an event to the given topic.
+// Returns an error if the topic does not exist or if publishing fails.
+func (h *pubsubDispatch) Publish(ctx context.Context, topicName string, event any) error {
 	topic, ok := h.getTopic(topicName)
 	if !ok {
 		return fmt.Errorf("topic '%s' not found", topicName)
@@ -236,7 +236,8 @@ func (h *eventDispatch) Publish(ctx context.Context, topicName string, event any
 	return nil
 }
 
-func (h *eventDispatch) Close() {
+// Close closes all topics and their subscriptions.
+func (h *pubsubDispatch) Close() {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 

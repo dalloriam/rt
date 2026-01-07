@@ -15,7 +15,7 @@ import (
 )
 
 type Runtime struct {
-	evt              *eventDispatch
+	evt              *pubsubDispatch
 	log              *slog.Logger
 	opts             Options
 	proc             *processManager
@@ -65,7 +65,7 @@ func New(opts ...Options) *Runtime {
 		tracer: otel.Tracer("github.com/dalloriam/tools/gopkg/runtime"),
 	}
 
-	evt := newEvt(log, rt)
+	evt := newPubSub(log, rt)
 
 	if options.InternalEventsTopic != "" {
 		if err := evt.CreateTopic(options.InternalEventsTopic, 0); err != nil {
@@ -97,11 +97,9 @@ func New(opts ...Options) *Runtime {
 
 func (r *Runtime) tryPublishEvent(ctx context.Context, event any) {
 	if r.opts.InternalEventsTopic != "" {
-		go func() {
-			if err := r.evt.Publish(ctx, r.opts.InternalEventsTopic, event); err != nil {
-				r.log.Error("error while publishing internal event", "error", err)
-			}
-		}()
+		if err := r.evt.Publish(ctx, r.opts.InternalEventsTopic, event); err != nil {
+			r.log.Error("error while publishing internal event", "error", err)
+		}
 	}
 }
 
@@ -158,9 +156,9 @@ func (r *Runtime) CreateTopic(name string, bufferSize int) error {
 }
 
 // Publish publishes a message to a topic.
+// Returns an error if the topic does not exist or if publishing fails.
 func (r *Runtime) Publish(ctx context.Context, topic string, msg any) error {
 	err := r.evt.Publish(ctx, topic, msg)
-
 	r.tryPublishEvent(ctx, publishEvent(topic, msg, err))
 
 	return err
