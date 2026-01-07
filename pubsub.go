@@ -130,7 +130,13 @@ func (b *topic) Unsubscribe(subName string) {
 func (b *topic) Publish(ctx context.Context, evt any) error {
 	ctx, span := b.tracer.Start(ctx, "Topic.Publish")
 	defer span.End()
-	b.rx <- evt
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case b.rx <- evt:
+	}
+
 	return nil
 }
 
