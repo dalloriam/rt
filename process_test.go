@@ -118,7 +118,7 @@ func TestManager_ProcessWait(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(nbWaiters)
 
-	for i := 0; i < nbWaiters; i++ {
+	for range nbWaiters {
 		go func() {
 			defer wg.Done()
 			proc.Wait()
