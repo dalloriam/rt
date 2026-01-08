@@ -30,6 +30,11 @@ type runtime struct {
 
 func defaultOptions() api.Options {
 	return api.Options{
+		Log: api.LogOptions{
+			Output: api.LogOutputStdout,
+			Format: api.LogFormatText,
+			Level:  "info",
+		},
 		PubSub: api.PubSubOptions{
 			MaxBufferSize: 1024,
 		},
@@ -46,11 +51,10 @@ func New(opts ...api.Options) api.Runtime {
 		options = opts[0]
 	}
 
-	// TODO: Improve logging.
-	// The runtime should:
-	// - have the option to emit logs to disk
-	// - allow processes to _read_ the logs (allowing for a "debugger" process)
-	log := slog.Default()
+	log, err := newLogger(options.Log)
+	if err != nil {
+		panic(err)
+	}
 
 	log.Info("initializing runtime")
 
