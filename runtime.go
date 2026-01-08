@@ -17,9 +17,6 @@ type ProcessState = api.ProcessState
 type OnErrorStrategy = api.OnErrorStrategy
 
 const (
-	// OnErrorPanic causes the process to panic if its internal function returns an error.
-	OnErrorPanic OnErrorStrategy = api.OnErrorPanic
-
 	// OnErrorExit causes the process to exit if its internal function returns an error.
 	OnErrorExit OnErrorStrategy = api.OnErrorExit
 

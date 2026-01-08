@@ -16,11 +16,8 @@ type ProcessState struct {
 type OnErrorStrategy int
 
 const (
-	// OnErrorPanic causes the process to panic if its internal function returns an error.
-	OnErrorPanic OnErrorStrategy = iota
-
 	// OnErrorExit causes the process to exit if its internal function returns an error.
-	OnErrorExit
+	OnErrorExit OnErrorStrategy = iota
 
 	// OnErrorRestart causes the process to be restarted if its internal function returns an error.
 	OnErrorRestart

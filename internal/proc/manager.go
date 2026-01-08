@@ -5,40 +5,46 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dalloriam/rt/api"
 	privApi "github.com/dalloriam/rt/internal/api"
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Manager manages processes.
 type Manager struct {
 	log    *slog.Logger
-	mtx    sync.Mutex
-	pid    uint64
-	proc   map[uint64]*Process
+	pid    atomic.Uint64
 	rt     privApi.Runtime
 	tracer trace.Tracer
+
+	mtx  sync.Mutex
+	proc map[uint64]*process
 }
 
+// NewManager creates a new process manager.
 func NewManager(rt privApi.Runtime, log *slog.Logger, tracer trace.Tracer) *Manager {
 	return &Manager{
 		log:    log.WithGroup("proc"),
-		proc:   make(map[uint64]*Process),
+		pid:    atomic.Uint64{},
 		rt:     rt,
 		tracer: tracer,
+
+		proc: make(map[uint64]*process),
 	}
 }
 
+// Spawn spawns a new process with the given function and options.
 func (m *Manager) Spawn(ctx context.Context, fn api.ProcessFn, opts api.SpawnOptions) api.ProcessHandle {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-
 	var span trace.Span
+
+	pid := m.pid.Add(1)
 
 	if opts.Instrument {
 		spanName := opts.Name
 		if spanName == "" {
-			spanName = fmt.Sprintf("process %d", m.pid)
+			spanName = fmt.Sprintf("process %d", pid)
 		}
 
 		ctx, span = m.tracer.Start(ctx, spanName)
@@ -46,7 +52,7 @@ func (m *Manager) Spawn(ctx context.Context, fn api.ProcessFn, opts api.SpawnOpt
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	log := m.log.With("pid", m.pid)
+	log := m.log.With("pid", pid)
 	if opts.Name != "" {
 		log = log.With("name", opts.Name)
 	}
@@ -57,19 +63,18 @@ func (m *Manager) Spawn(ctx context.Context, fn api.ProcessFn, opts api.SpawnOpt
 		Rt:  m.rt,
 	}
 
-	proc := &Process{
+	proc := &process{
 		cancel:  cancel,
 		fn:      fn,
 		manager: m,
 		opts:    opts,
-		pid:     m.pid,
+		pid:     pid,
 		span:    span,
 		state:   state,
 		wg:      sync.WaitGroup{},
 	}
 
-	m.proc[m.pid] = proc
-	m.pid++
+	m.register(pid, proc)
 
 	proc.wg.Add(1)
 	go proc.run()
@@ -79,12 +84,7 @@ func (m *Manager) Spawn(ctx context.Context, fn api.ProcessFn, opts api.SpawnOpt
 	return proc
 }
 
-func (m *Manager) remove(pid uint64) {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	delete(m.proc, pid)
-}
-
+// Close stops all running processes.
 func (m *Manager) Close() error {
 	var wg sync.WaitGroup
 	m.mtx.Lock()
@@ -103,4 +103,16 @@ func (m *Manager) Close() error {
 	wg.Wait()
 
 	return nil
+}
+
+func (m *Manager) register(pid uint64, proc *process) {
+	m.mtx.Lock()
+	m.proc[pid] = proc
+	m.mtx.Unlock()
+}
+
+func (m *Manager) unregister(pid uint64) {
+	m.mtx.Lock()
+	delete(m.proc, pid)
+	m.mtx.Unlock()
 }

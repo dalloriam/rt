@@ -41,7 +41,7 @@ func TestRuntimeProcSpawn_StartStop(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorExit})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
@@ -59,7 +59,7 @@ func TestRuntimeShutdown_ProcCleanup(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorExit})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
@@ -107,7 +107,7 @@ func TestManager_ProcessWait(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorExit})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
