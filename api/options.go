@@ -1,4 +1,4 @@
-package rt
+package api
 
 import "github.com/dalloriam/rt/telemetry"
 

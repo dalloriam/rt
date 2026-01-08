@@ -1,4 +1,4 @@
-package rt
+package pubsub
 
 import (
 	"context"
@@ -7,7 +7,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dalloriam/rt/api"
+	privApi "github.com/dalloriam/rt/internal/api"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // A Subscription represents a subscription to a topic.
@@ -159,26 +162,26 @@ func (b *topic) Close() {
 	}
 }
 
-type pubsubDispatch struct {
+type PubSub struct {
 	log    *slog.Logger
 	mtx    sync.Mutex
-	rt     *Runtime
+	rt     privApi.Runtime
 	topics map[string]*topic
 }
 
-func newPubSub(logger *slog.Logger, rt *Runtime) *pubsubDispatch {
+func New(logger *slog.Logger, rt privApi.Runtime) *PubSub {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &pubsubDispatch{
+	return &PubSub{
 		log:    logger.WithGroup("evt"),
 		rt:     rt,
 		topics: make(map[string]*topic),
 	}
 }
 
-func (h *pubsubDispatch) getTopic(name string) (*topic, bool) {
+func (h *PubSub) getTopic(name string) (*topic, bool) {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
@@ -187,7 +190,17 @@ func (h *pubsubDispatch) getTopic(name string) (*topic, bool) {
 }
 
 // CreateTopic creates a new topic with the given name and buffer size.
-func (h *pubsubDispatch) CreateTopic(name string, bufferSize uint32) error {
+// Returns an error if the topic already exists or if the buffer size exceeds
+// the maximum allowed size.
+func (h *PubSub) CreateTopic(name string, bufferSize uint32) error {
+	if bufferSize > h.rt.Options().PubSub.MaxBufferSize {
+		return ErrBufferSizeTooLarge
+	}
+
+	if name == "" {
+		return ErrInvalidTopicName
+	}
+
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 
@@ -195,13 +208,14 @@ func (h *pubsubDispatch) CreateTopic(name string, bufferSize uint32) error {
 		return fmt.Errorf("topic '%s' already exists", name)
 	}
 
-	h.topics[name] = newTopic(bufferSize, h.rt.tracer)
+	h.topics[name] = newTopic(bufferSize, noop.NewTracerProvider().Tracer("noop"))
+	h.rt.PublishEvent(context.Background(), createTopicEvent(name, bufferSize))
 	h.log.Info("topic created", "name", name)
 	return nil
 }
 
 // Subscribe creates or retrieves a subscription to the given topic.
-func (h *pubsubDispatch) Subscribe(topicName, subscription string) (*Subscription, error) {
+func (h *PubSub) Subscribe(topicName, subscription string) (api.SubscriptionHandle, error) {
 	topic, ok := h.getTopic(topicName)
 	if !ok {
 		return nil, fmt.Errorf("topic '%s' not found", topicName)
@@ -213,31 +227,33 @@ func (h *pubsubDispatch) Subscribe(topicName, subscription string) (*Subscriptio
 	}
 
 	h.log.Info("subscribed", "topic", topicName, "subscription", subscription)
+	h.rt.PublishEvent(context.Background(), createSubscriptionEvent(topicName, subscription))
 
 	return sub, nil
 }
 
 // Publish sends an event to the given topic.
 // Returns an error if the topic does not exist or if publishing fails.
-func (h *pubsubDispatch) Publish(ctx context.Context, topicName string, event any) error {
+func (h *PubSub) Publish(ctx context.Context, topicName string, msg any) error {
 	topic, ok := h.getTopic(topicName)
 	if !ok {
 		return fmt.Errorf("topic '%s' not found", topicName)
 	}
 
-	err := topic.Publish(ctx, event)
+	err := topic.Publish(ctx, msg)
 
 	if err != nil {
 		return err
 	}
 
-	h.log.Info("published", "topic", topicName, "event", event)
+	h.log.Info("published", "topic", topicName, "event", msg)
+	h.rt.PublishEvent(ctx, publishEvent(topicName, msg))
 
 	return nil
 }
 
 // Close closes all topics and their subscriptions.
-func (h *pubsubDispatch) Close() {
+func (h *PubSub) Close() {
 	h.mtx.Lock()
 	defer h.mtx.Unlock()
 

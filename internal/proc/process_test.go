@@ -1,4 +1,4 @@
-package rt_test
+package proc_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dalloriam/rt"
+	"github.com/dalloriam/rt/api"
 )
 
 type testProcess struct {
@@ -17,7 +18,7 @@ type testProcess struct {
 	StartCount atomic.Int32
 }
 
-func (p *testProcess) Run(state *rt.ProcessState) error {
+func (p *testProcess) Run(state *api.ProcessState) error {
 	p.StartCount.Add(1)
 	if p.ShouldFail {
 		return errors.New("some error")
@@ -40,7 +41,7 @@ func TestRuntimeProcSpawn_StartStop(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
@@ -58,7 +59,7 @@ func TestRuntimeShutdown_ProcCleanup(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
@@ -78,7 +79,7 @@ func TestRuntimeProcSpawn_FailOnError(t *testing.T) {
 
 	p := &testProcess{ShouldFail: true}
 
-	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorExit})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorExit})
 
 	time.Sleep(100 * time.Millisecond)
 	if proc.IsRunning() {
@@ -92,7 +93,7 @@ func TestManager_RestartOnError(t *testing.T) {
 
 	p := &testProcess{ShouldFail: true}
 
-	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorRestart})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorRestart})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {
@@ -106,7 +107,7 @@ func TestManager_ProcessWait(t *testing.T) {
 
 	p := &testProcess{}
 
-	proc := r.ProcSpawn(context.Background(), p.Run, rt.ProcessSpawnOptions{ErrorHandling: rt.ProcessErrorPanic})
+	proc := r.Proc().Spawn(context.Background(), p.Run, api.SpawnOptions{OnError: api.OnErrorPanic})
 
 	time.Sleep(100 * time.Millisecond)
 	if !proc.IsRunning() {

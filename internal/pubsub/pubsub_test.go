@@ -1,4 +1,4 @@
-package rt_test
+package pubsub_test
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type Results struct {
 func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
 	rt := rt.New()
 
-	if err := rt.CreateTopic(TopicName, buffering); err != nil {
+	if err := rt.PubSub().CreateTopic(TopicName, buffering); err != nil {
 		t.Fatalf("failed to create topic: %v", err)
 	}
 
@@ -35,7 +35,7 @@ func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
 		subName := fmt.Sprintf("sub-%d", i)
 
 		for range consumersPerSub {
-			ch, err := rt.Subscribe(TopicName, subName)
+			ch, err := rt.PubSub().Subscribe(TopicName, subName)
 			if err != nil {
 				panic(err)
 			}
@@ -55,7 +55,7 @@ func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
 	}
 
 	for i := range 10 {
-		if err := rt.Publish(context.Background(), TopicName, fmt.Sprintf("bing%d", i)); err != nil {
+		if err := rt.PubSub().Publish(context.Background(), TopicName, fmt.Sprintf("bing%d", i)); err != nil {
 			t.Fatalf("failed to publish: %v", err)
 		}
 	}
