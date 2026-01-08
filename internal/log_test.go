@@ -19,6 +19,7 @@ func TestParseLogLevel(t *testing.T) {
 		name     string
 		input    string
 		expected slog.Level
+		wantErr  bool
 	}{
 		{
 			name:     "debug level",
@@ -54,17 +55,24 @@ func TestParseLogLevel(t *testing.T) {
 			name:     "unknown level defaults to info",
 			input:    "unknown",
 			expected: slog.LevelInfo,
+			wantErr:  true,
 		},
 		{
 			name:     "empty string defaults to info",
 			input:    "",
 			expected: slog.LevelInfo,
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseLogLevel(tt.input)
+			got, err := parseLogLevel(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseLogLevel(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+
 			if got != tt.expected {
 				t.Errorf("parseLogLevel(%q) = %v, want %v", tt.input, got, tt.expected)
 			}
@@ -133,13 +141,12 @@ func TestGetLoggerOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown output panics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("expected panic for unknown log output, but did not panic")
-			}
-		}()
-		getLoggerOutput(api.LogOutput("unknown"), "")
+	t.Run("unknown output errors", func(t *testing.T) {
+		_, err := getLoggerOutput(api.LogOutput("hahoo"), "")
+		if err == nil {
+			t.Error("expected error for unknown output option, got nil")
+
+		}
 	})
 }
 
