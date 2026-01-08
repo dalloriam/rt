@@ -1,4 +1,4 @@
-package rt
+package pubsub
 
 import "errors"
 
