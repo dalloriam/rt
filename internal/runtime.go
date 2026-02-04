@@ -109,6 +109,10 @@ func (r *runtime) PubSub() api.PubSub {
 	return r.msg
 }
 
+func (r *runtime) Scheduler() api.Scheduler {
+	return r.sched
+}
+
 func (r *runtime) BlockUntilSignal() {
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
