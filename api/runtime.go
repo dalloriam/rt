@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
 type ProcessFn func(state *ProcessState) error
@@ -57,10 +58,15 @@ type PubSub interface {
 	Close()
 }
 
+type Scheduler interface {
+	Schedule(process ProcessFn, opts SpawnOptions, interval time.Duration)
+}
+
 type Runtime interface {
 	BlockUntilSignal()
 	Close()
 
 	Proc() Proc
 	PubSub() PubSub
+	Scheduler() Scheduler
 }
