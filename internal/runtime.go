@@ -115,6 +115,8 @@ func (r *runtime) BlockUntilSignal() {
 func (r *runtime) Close() {
 	r.log.Info("shutting down runtime")
 
+	r.sched.Close()
+
 	if err := r.proc.Close(); err != nil {
 		r.log.Error("error while shutting down process manager", "error", err)
 	}
