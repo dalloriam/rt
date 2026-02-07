@@ -33,10 +33,8 @@ func (p *process) IsRunning() bool {
 
 // Stop stops the process.
 func (p *process) Stop() {
-	if p.running.Load() {
-		p.cancel()
-		p.Wait()
-	}
+	p.cancel()
+	p.Wait()
 }
 
 // Wait waits for the process to finish.
