@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	goruntime "runtime"
+
 	"github.com/dalloriam/rt"
 	"github.com/dalloriam/rt/api"
 )
@@ -128,4 +130,51 @@ func TestManager_ProcessWait(t *testing.T) {
 
 	proc.Stop()
 	wg.Wait() // ensure that stopping the process unblocks any waiters
+}
+
+// Reproduces issue #3 from REVIEW_REPORT.md:
+// Stop() can be a no-op if called before the spawned goroutine marks itself running.
+func TestProcess_StopImmediatelyAfterSpawn_DoesStop(t *testing.T) {
+	prev := goruntime.GOMAXPROCS(1)
+	defer goruntime.GOMAXPROCS(prev)
+
+	r := rt.New(api.Options{
+		Log: api.LogOptions{
+			Output: api.LogOutputNone,
+			Format: api.LogFormatText,
+			Level:  "info",
+		},
+		PubSub: api.PubSubOptions{
+			MaxBufferSize: 1024,
+		},
+	})
+	defer r.Close()
+
+	enteredWithLiveContext := make(chan struct{}, 1)
+
+	proc := r.Proc().Spawn(context.Background(), func(state *api.ProcessState) error {
+		if state.Ctx.Err() == nil {
+			select {
+			case enteredWithLiveContext <- struct{}{}:
+			default:
+			}
+		}
+
+		<-state.Ctx.Done()
+		return nil
+	}, api.SpawnOptions{OnError: api.OnErrorExit})
+
+	// Intended to stop the process, but can race before running=true is set.
+	proc.Stop()
+
+	// Let the spawned goroutine run after Stop() returned.
+	goruntime.Gosched()
+
+	select {
+	case <-enteredWithLiveContext:
+		// Cleanup for this failing repro path.
+		proc.Stop()
+		t.Fatal("process entered function with live context after immediate Stop()")
+	case <-time.After(25 * time.Millisecond):
+	}
 }
