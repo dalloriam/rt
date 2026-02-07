@@ -38,8 +38,7 @@ func defaultOptions() api.Options {
 		PubSub: api.PubSubOptions{
 			MaxBufferSize: 1024,
 		},
-		InternalEvents: nil,
-		Telemetry:      nil,
+		Telemetry: nil,
 	}
 }
 
@@ -65,13 +64,6 @@ func New(opts ...api.Options) api.Runtime {
 	}
 
 	msg := pubsub.New(log, rt)
-
-	if options.InternalEvents != nil {
-		if err := msg.CreateTopic(options.InternalEvents.Topic, options.InternalEvents.BufferSize); err != nil {
-			panic(err)
-		}
-	}
-
 	rt.msg = msg
 
 	if options.Telemetry != nil {
@@ -91,14 +83,6 @@ func New(opts ...api.Options) api.Runtime {
 	log.Info("runtime ready")
 
 	return rt
-}
-
-func (r *runtime) PublishEvent(ctx context.Context, event any) {
-	if r.opts.InternalEvents != nil {
-		if err := r.msg.Publish(ctx, r.opts.InternalEvents.Topic, event); err != nil {
-			r.log.Error("error while publishing internal event", "error", err)
-		}
-	}
 }
 
 func (r *runtime) Proc() api.Proc {
@@ -129,8 +113,6 @@ func (r *runtime) BlockUntilSignal() {
 
 // Close closes the runtime, stopping all running processes.
 func (r *runtime) Close() {
-	r.PublishEvent(context.Background(), closeEvent())
-
 	r.log.Info("shutting down runtime")
 
 	if err := r.proc.Close(); err != nil {

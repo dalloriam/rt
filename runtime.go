@@ -6,8 +6,6 @@ import (
 )
 
 // Options reexports
-
-type InternalEventsOptions = api.InternalEventsOptions
 type PubSubOptions = api.PubSubOptions
 type Options = api.Options
 

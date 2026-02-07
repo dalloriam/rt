@@ -63,8 +63,6 @@ func (p *process) run() {
 	for {
 		err := p.fn(p.state)
 
-		p.manager.rt.PublishEvent(p.state.Ctx, processExitedEvent(p.pid, err))
-
 		if err != nil {
 			p.state.Log.Error("process failed", "error", err)
 
