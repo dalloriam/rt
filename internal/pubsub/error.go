@@ -8,3 +8,6 @@ var ErrBufferSizeTooLarge = errors.New("buffer size too large")
 
 // ErrInvalidTopicName is returned when a topic name is invalid.
 var ErrInvalidTopicName = errors.New("invalid topic name")
+
+// ErrTopicClosed is returned when publishing to a closed topic.
+var ErrTopicClosed = errors.New("topic is closed")

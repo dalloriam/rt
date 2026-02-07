@@ -60,6 +60,10 @@ type topic struct {
 
 	mtx           sync.Mutex
 	subscriptions map[string]*Subscription
+
+	closeMtx  sync.RWMutex
+	closeOnce sync.Once
+	closed    bool
 }
 
 func newTopic(bufferSize uint32, tracer trace.Tracer) *topic {
@@ -132,10 +136,18 @@ func (b *topic) Publish(ctx context.Context, msg any) error {
 	ctx, span := b.tracer.Start(ctx, "Topic.Publish")
 	defer span.End()
 
+	b.closeMtx.RLock()
+	if b.closed {
+		b.closeMtx.RUnlock()
+		return ErrTopicClosed
+	}
+
 	select {
 	case <-ctx.Done():
+		b.closeMtx.RUnlock()
 		return ctx.Err()
 	case b.rx <- msg:
+		b.closeMtx.RUnlock()
 	}
 
 	return nil
@@ -143,9 +155,12 @@ func (b *topic) Publish(ctx context.Context, msg any) error {
 
 // Close closes the topic and all its subscriptions.
 func (b *topic) Close() {
-	b.mtx.Lock()
-	close(b.rx)
-	b.mtx.Unlock()
+	b.closeOnce.Do(func() {
+		b.closeMtx.Lock()
+		b.closed = true
+		close(b.rx)
+		b.closeMtx.Unlock()
+	})
 
 	b.wg.Wait()
 
