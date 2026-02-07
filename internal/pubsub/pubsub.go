@@ -209,7 +209,6 @@ func (h *PubSub) CreateTopic(name string, bufferSize uint32) error {
 	}
 
 	h.topics[name] = newTopic(bufferSize, noop.NewTracerProvider().Tracer("noop"))
-	h.rt.PublishEvent(context.Background(), createTopicEvent(name, bufferSize))
 	h.log.Info("topic created", "name", name)
 	return nil
 }
@@ -227,7 +226,6 @@ func (h *PubSub) Subscribe(topicName, subscription string) (api.SubscriptionHand
 	}
 
 	h.log.Info("subscribed", "topic", topicName, "subscription", subscription)
-	h.rt.PublishEvent(context.Background(), createSubscriptionEvent(topicName, subscription))
 
 	return sub, nil
 }
@@ -247,7 +245,6 @@ func (h *PubSub) Publish(ctx context.Context, topicName string, msg any) error {
 	}
 
 	h.log.Info("published", "topic", topicName, "event", msg)
-	h.rt.PublishEvent(ctx, publishEvent(topicName, msg))
 
 	return nil
 }

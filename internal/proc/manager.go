@@ -79,8 +79,6 @@ func (m *Manager) Spawn(ctx context.Context, fn api.ProcessFn, opts api.SpawnOpt
 	proc.wg.Add(1)
 	go proc.run()
 
-	m.rt.PublishEvent(ctx, processSpawnedEvent(proc.PID()))
-
 	return proc
 }
 

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"context"
-
 	"github.com/dalloriam/rt/api"
 )
 
@@ -11,5 +9,4 @@ type Runtime interface {
 	api.Runtime
 
 	Options() *api.Options
-	PublishEvent(ctx context.Context, event any)
 }
