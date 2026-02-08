@@ -11,10 +11,11 @@ import (
 )
 
 type Scheduler struct {
-	log  *slog.Logger
-	quit chan struct{}
-	rt   privApi.Runtime
-	wg   sync.WaitGroup
+	log       *slog.Logger
+	quit      chan struct{}
+	rt        privApi.Runtime
+	wg        sync.WaitGroup
+	closeOnce sync.Once
 }
 
 func New(rt privApi.Runtime, log *slog.Logger) *Scheduler {
@@ -55,6 +56,8 @@ func (s *Scheduler) Schedule(process api.ProcessFn, opts api.SpawnOptions, inter
 }
 
 func (s *Scheduler) Close() {
-	close(s.quit)
+	s.closeOnce.Do(func() {
+		close(s.quit)
+	})
 	s.wg.Wait()
 }
