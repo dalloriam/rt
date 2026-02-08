@@ -30,6 +30,15 @@ type PubSub = api.PubSub
 type Runtime = api.Runtime
 
 // New creates a new runtime with the given options.
-func New(opts ...api.Options) api.Runtime {
+func New(opts ...api.Options) (api.Runtime, error) {
 	return internal.New(opts...)
+}
+
+// MustNew creates a new runtime with the given options, panicking on error.
+func MustNew(opts ...api.Options) api.Runtime {
+	rt, err := internal.New(opts...)
+	if err != nil {
+		panic(err)
+	}
+	return rt
 }

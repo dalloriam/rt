@@ -17,7 +17,7 @@ type Results struct {
 }
 
 func doTest(t *testing.T, buffering uint32, subCount int, consumersPerSub int) {
-	rt := rt.New()
+	rt := rt.MustNew()
 
 	if err := rt.PubSub().CreateTopic(TopicName, buffering); err != nil {
 		t.Fatalf("failed to create topic: %v", err)

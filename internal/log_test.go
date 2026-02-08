@@ -474,9 +474,9 @@ func TestRuntimeWithLogOptions(t *testing.T) {
 			},
 		}
 
-		rt := New(opts)
-		if rt == nil {
-			t.Fatal("expected non-nil runtime")
+		rt, err := New(opts)
+		if err != nil {
+			t.Fatalf("failed to create runtime: %v", err)
 		}
 
 		// Create a simple process to generate more logs
@@ -527,9 +527,9 @@ func TestRuntimeWithLogOptions(t *testing.T) {
 			},
 		}
 
-		rt := New(opts)
-		if rt == nil {
-			t.Fatal("expected non-nil runtime")
+		rt, err := New(opts)
+		if err != nil {
+			t.Fatalf("failed to create runtime: %v", err)
 		}
 
 		rt.Close()
@@ -537,9 +537,9 @@ func TestRuntimeWithLogOptions(t *testing.T) {
 	})
 
 	t.Run("runtime with default options", func(t *testing.T) {
-		rt := New()
-		if rt == nil {
-			t.Fatal("expected non-nil runtime")
+		rt, err := New()
+		if err != nil {
+			t.Fatalf("failed to create runtime: %v", err)
 		}
 
 		// Default options should work without errors
@@ -559,7 +559,10 @@ func TestRuntimeWithLogOptions(t *testing.T) {
 			},
 		}
 
-		rt := New(opts)
+		rt, err := New(opts)
+		if err != nil {
+			t.Fatalf("failed to create runtime: %v", err)
+		}
 		rt.Close()
 
 		// Give the logger time to flush

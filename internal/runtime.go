@@ -2,9 +2,11 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"go.opentelemetry.io/otel"
@@ -26,6 +28,7 @@ type runtime struct {
 	sched            *sched.Scheduler
 	telemetryCleanup func(context.Context) error
 	tracer           trace.Tracer
+	closeOnce        sync.Once
 }
 
 func defaultOptions() api.Options {
@@ -43,7 +46,7 @@ func defaultOptions() api.Options {
 }
 
 // New returns a new runtime.
-func New(opts ...api.Options) api.Runtime {
+func New(opts ...api.Options) (api.Runtime, error) {
 
 	options := defaultOptions()
 	if len(opts) > 0 {
@@ -52,7 +55,7 @@ func New(opts ...api.Options) api.Runtime {
 
 	log, err := newLogger(options.Log)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("logger setup: %w", err)
 	}
 
 	log.Info("initializing runtime")
@@ -70,7 +73,7 @@ func New(opts ...api.Options) api.Runtime {
 		var err error
 		rt.telemetryCleanup, err = telemetry.Setup(context.Background(), *options.Telemetry)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("telemetry setup: %w", err)
 		}
 		log.Info("OTel is enabled")
 	}
@@ -82,7 +85,7 @@ func New(opts ...api.Options) api.Runtime {
 
 	log.Info("runtime ready")
 
-	return rt
+	return rt, nil
 }
 
 func (r *runtime) Proc() api.Proc {
@@ -112,24 +115,27 @@ func (r *runtime) BlockUntilSignal() {
 }
 
 // Close closes the runtime, stopping all running processes.
+// It is safe to call multiple times.
 func (r *runtime) Close() {
-	r.log.Info("shutting down runtime")
+	r.closeOnce.Do(func() {
+		r.log.Info("shutting down runtime")
 
-	r.sched.Close()
+		r.sched.Close()
 
-	if err := r.proc.Close(); err != nil {
-		r.log.Error("error while shutting down process manager", "error", err)
-	}
-
-	r.msg.Close()
-
-	if r.telemetryCleanup != nil {
-		if err := r.telemetryCleanup(context.Background()); err != nil {
-			r.log.Error("error while shutting down telemetry", "error", err)
+		if err := r.proc.Close(); err != nil {
+			r.log.Error("error while shutting down process manager", "error", err)
 		}
-	}
 
-	r.log.Info("runtime shutdown complete")
+		r.msg.Close()
+
+		if r.telemetryCleanup != nil {
+			if err := r.telemetryCleanup(context.Background()); err != nil {
+				r.log.Error("error while shutting down telemetry", "error", err)
+			}
+		}
+
+		r.log.Info("runtime shutdown complete")
+	})
 }
 
 func (r *runtime) Options() *api.Options {

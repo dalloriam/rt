@@ -38,7 +38,7 @@ func (p *testProcess) Run(state *api.ProcessState) error {
 }
 
 func TestRuntimeProcSpawn_StartStop(t *testing.T) {
-	r := rt.New()
+	r := rt.MustNew()
 	defer r.Close()
 
 	p := &testProcess{}
@@ -57,7 +57,7 @@ func TestRuntimeProcSpawn_StartStop(t *testing.T) {
 }
 
 func TestRuntimeShutdown_ProcCleanup(t *testing.T) {
-	r := rt.New()
+	r := rt.MustNew()
 
 	p := &testProcess{}
 
@@ -76,7 +76,7 @@ func TestRuntimeShutdown_ProcCleanup(t *testing.T) {
 }
 
 func TestRuntimeProcSpawn_FailOnError(t *testing.T) {
-	r := rt.New()
+	r := rt.MustNew()
 	defer r.Close()
 
 	p := &testProcess{ShouldFail: true}
@@ -90,7 +90,7 @@ func TestRuntimeProcSpawn_FailOnError(t *testing.T) {
 }
 
 func TestManager_RestartOnError(t *testing.T) {
-	r := rt.New()
+	r := rt.MustNew()
 	defer r.Close()
 
 	p := &testProcess{ShouldFail: true}
@@ -104,7 +104,7 @@ func TestManager_RestartOnError(t *testing.T) {
 }
 
 func TestManager_ProcessWait(t *testing.T) {
-	r := rt.New()
+	r := rt.MustNew()
 	defer r.Close()
 
 	p := &testProcess{}
@@ -132,13 +132,12 @@ func TestManager_ProcessWait(t *testing.T) {
 	wg.Wait() // ensure that stopping the process unblocks any waiters
 }
 
-// Reproduces issue #3 from REVIEW_REPORT.md:
 // Stop() can be a no-op if called before the spawned goroutine marks itself running.
 func TestProcess_StopImmediatelyAfterSpawn_DoesStop(t *testing.T) {
 	prev := goruntime.GOMAXPROCS(1)
 	defer goruntime.GOMAXPROCS(prev)
 
-	r := rt.New(api.Options{
+	r := rt.MustNew(api.Options{
 		Log: api.LogOptions{
 			Output: api.LogOutputNone,
 			Format: api.LogFormatText,

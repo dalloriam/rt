@@ -96,6 +96,20 @@ func TestSchedule_UsesTickerAndStopsOnClose(t *testing.T) {
 	}
 }
 
+func TestSchedule_CloseIsIdempotent(t *testing.T) {
+	rt := newFakeRuntime()
+	s := New(rt, nil)
+
+	s.Schedule(func(*api.ProcessState) error { return nil }, api.SpawnOptions{}, 5*time.Millisecond)
+
+	waitForSpawns(t, rt.proc, 1, 250*time.Millisecond)
+
+	// Closing multiple times must not panic.
+	s.Close()
+	s.Close()
+	s.Close()
+}
+
 func waitForSpawns(t *testing.T, p *fakeProc, want int, timeout time.Duration) {
 	t.Helper()
 
